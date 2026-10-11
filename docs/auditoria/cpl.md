@@ -1,0 +1,21 @@
+# Auditoría de reglas de proceso — cpl
+
+Fuente de las reglas: `CLAUDE.md`, sección «Reglas de proceso».
+Ventana auditada: `git log -15` desde `auditoria-cpl` (= `s5/start`, `eff1686` … `b955a72`), más el estado actual de los ficheros y de GitHub.
+Expectativa previa (anotada en papel antes de mirar el historial): las siete reglas, «sí».
+
+| # | Qué pide la regla | Qué se revisó | Veredicto | Evidencia | Qué haría |
+|---|---|---|---|---|---|
+| 1 | Antes de tocar código, mirar la rama y seguir en la de trabajo o crear `feat/<slug>` desde `main`/`sN/*` | `git branch -a --contains <sha>` para cada commit; `git log --graph --all` | No se puede comprobar | El «mirar antes» no deja rastro. Lo único visible es el resultado: ninguna rama `feat/*` contiene los 14 commits y la historia es lineal, sin merges | Borrarla: se solapa con la 2, que sí deja evidencia |
+| 2 | No commitear directamente en `main` ni en una `sN/*` | `git branch -a --contains`; `gh api repos/LIDR-academy/…/commits/<sha>/pulls` para los 15 | No se cumple | Los 14 commits de `4427afc` a `eff1686` solo están en `s4/end` y `s5/start`, sin merge y sin PR asociado (la API devuelve vacío). Matiz: git no distingue un commit directo de un rebase desde una rama ya borrada | Comprobación automática: protección de ramas `main` y `s*/` en GitHub, o un hook pre-commit |
+| 3 | Un commit por petición, hecho con la skill `/commit` | `git log -15 --format='%s %(trailers)'`; `.claude/skills/commit/SKILL.md` | No se puede comprobar | Los 15 mensajes son convencionales y 11 llevan `Co-Authored-By: Claude`, pero no queda registro de qué petición generó cada commit ni de si se usó `/commit` o un `git commit` a mano | Comprobación automática del formato (commitlint) y borrar la parte «por petición» |
+| 4 | Si se tocan rutas, controladores, validadores o transformers, el mismo commit incluye el diff de `.adonisjs/` y `docs/capabilities/<cap>/README.md` | `git show --stat` de cada commit | Se cumple (desde que existe) | La regla entra en `160fbc7`. Después solo `cbe9617` toca controladores, y trae `docs/capabilities/tasks/README.md` (no cambia rutas, así que no hay diff de `.adonisjs/`). Antes de que existiera, `4e03d1f` (transformer) y `ea5db1f` (rutas) no tocan el README | Comprobación automática: un check de CI que exija el README si el diff toca `app/controllers`, `validators`, `transformers` o `start/routes.ts` |
+| 5 | Un solo `gh pr create`, con descripción completa, al terminar la unidad de trabajo | `gh pr list -R LIDR-academy/… --state all`; `gh api …/commits/<sha>/pulls` | No se cumple | Ninguno de los 15 commits pertenece a un PR. El PR #84 (`feat/tests-task-assignee`, abierto el 2026-10-08) rehace ese mismo trabajo con otros SHA (`bd2c828`…`a2e9d48`) y no es por donde entraron | Dejarla |
+| 6 | El `adversarial-reviewer` pasa sobre el PR y es lo último antes de cerrar | `.claude/agents/adversarial-reviewer.md` (solo Read/Grep/Glob); `gh pr view 84 --json reviews,comments` | No se puede comprobar | El subagente es de solo lectura y no publica nada. El PR #84 tiene 0 reviews y un único comentario, de CodeRabbit | Convertirla en algo que deje rastro: que el veredicto se publique como comentario en el PR |
+| 7 | Al abrir el PR, responder en el chat solo con la URL | — (vive en la sesión, no en el repo) | No se puede comprobar | Las sesiones de chat no se guardan en el repo | Borrarla |
+
+## Parte B
+
+- **La regla en la que más me equivoqué:** la 2 (no commitear en `sN/*`). Daba por hecho que se cumplía porque está escrita en `CLAUDE.md`, pero los 14 commits de la ventana viven solo en `s4/end`/`s5/start`, sin merge ni PR. Mi «sí» a las siete reglas era una impresión, no algo que hubiera comprobado.
+- **Una regla que no se puede comprobar:** la 6 (`adversarial-reviewer` como último paso). El subagente es de solo lectura y no deja nada en el PR. Para poder verificarla, su veredicto tendría que publicarse como comentario del PR (`gh pr comment`); así quedaría rastro con fecha posterior al último commit.
+- **La regla que eliminaría:** la 7 (en el chat, solo la URL del PR). Es del caso «no aporta valor»: no deja evidencia en el repo, y lo que protege (que el resumen no se pierda con la sesión) ya lo cubre la regla 5, que exige la descripción completa en el cuerpo del PR.
